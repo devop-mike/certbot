@@ -2,8 +2,9 @@
 import collections
 import logging
 import time
+import os
+
 from typing import Any
-from typing import Callable
 from typing import DefaultDict
 from typing import Dict
 from typing import List
@@ -13,11 +14,9 @@ from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
 
 from acme.challenges import ChallengeResponse
-from certbot import achallenges
 from certbot import errors
 from certbot.achallenges import AnnotatedChallenge
 from certbot.plugins import dns_common
-from certbot.util import add_deprecated_argument
 
 logger = logging.getLogger(__name__)
 
@@ -40,31 +39,59 @@ class Authenticator(dns_common.DNSAuthenticator):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.r53 = boto3.client("route53")
+        self.credentials = None
+        self.credentials_file = None
+        self.credentials_profile = None
+        self.credentials_key_id = None
+        self.credentials_access_key = None
+        self.r53 = None
+        # self.r53 = boto3.client("route53")
         self._resource_records: DefaultDict[str, List[Dict[str, str]]] = \
             collections.defaultdict(list)
+
+    @classmethod
+    def add_parser_arguments(cls, add):  # pylint: disable=arguments-differ
+        super(Authenticator, cls).add_parser_arguments(add)
+        add('credentials', help='route53 credentials file.')
+        add('credentials-profile', help='profile to us from credentials file.')
+        add('credentials-key-id', help='aws_access_key_id to use. overrides file and profile.')
+        add('credentials-access_key', help='aws_secret_access_key to use. overrides file and profile.')
+
 
     def more_info(self) -> str:
         return "Solve a DNS01 challenge using AWS Route53"
 
-    @classmethod
-    def add_parser_arguments(cls, add: Callable[..., None],  # pylint: disable=arguments-differ
-                             default_propagation_seconds: int = 10) -> None:
-        add_deprecated_argument(add, 'propagation-seconds', 1)
-
-    def auth_hint(self, failed_achalls: List[achallenges.AnnotatedChallenge]) -> str:
-        return (
-            'The Certificate Authority failed to verify the DNS TXT records created by '
-            '--dns-route53. Ensure the above domains have their DNS hosted by AWS Route53.'
-        )
-
     def _setup_credentials(self) -> None:
-        pass
+        self.credentials_file = self.conf('credentials')
+        self.credentials_profile = self.conf('credentials-profile')
+        self.credentials_key_id = self.conf('credentials-key-id')
+        self.credentials_access_key = self.conf('credentials-access_key')
+
+        if self.credentials_access_key != None and self.credentials_key_id != None:
+            #logger.info('mcdebug key [%s][%s]', self.credentials_key_id, self.credentials_access_key)
+            self.r53 = boto3.client(
+                "route53",
+                aws_access_key_id=self.credentials_key_id,
+                aws_secret_access_key=self.credentials_access_key
+            )
+        else:
+            if self.credentials_file != None:
+                #logger.info('mcdebug file %s', self.credentials_file)
+                os.environ['AWS_SHARED_CREDENTIALS_FILE'] = self.credentials_file
+
+            if self.credentials_profile != None:
+                #logger.info('mcdebug profile %s', self.credentials_profile)
+                session = boto3.Session(profile_name=self.credentials_profile)
+                self.r53 = session.client("route53")
+            else:
+                #logger.info('mcdebug boto3 finding credentials')
+                self.r53 = boto3.client("route53")
 
     def _perform(self, domain: str, validation_name: str, validation: str) -> None:
         pass
 
     def perform(self, achalls: List[AnnotatedChallenge]) -> List[ChallengeResponse]:
+        self._setup_credentials()
         self._attempt_cleanup = True
 
         try:
