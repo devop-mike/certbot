@@ -19,9 +19,11 @@ install_requires = [
     'pywin32>=300 ; sys_platform == "win32"',
     'pyyaml',
     'pytz>=2019.3',
-    'requests',
+    # requests unvendored its dependencies in version 2.16.0 and this code relies on that for
+    # calling `urllib3.disable_warnings`.
+    'requests>=2.16.0',
     'setuptools',
-    'types-python-dateutil'
+    'types-python-dateutil',
 ]
 
 setup(
@@ -32,18 +34,18 @@ setup(
     author="Certbot Project",
     author_email='certbot-dev@eff.org',
     license='Apache License 2.0',
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Security',
     ],

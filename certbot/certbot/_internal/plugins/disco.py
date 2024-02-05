@@ -182,9 +182,9 @@ class PluginsRegistry(Mapping):
         plugin_paths = plugin_paths_string.split(':') if plugin_paths_string else []
         # XXX should ensure this only happens once
         sys.path.extend(plugin_paths)
-        entry_points = list(importlib_metadata.entry_points(
+        entry_points = list(importlib_metadata.entry_points(  # pylint: disable=unexpected-keyword-arg
             group=constants.SETUPTOOLS_PLUGINS_ENTRY_POINT))
-        old_entry_points = list(importlib_metadata.entry_points(
+        old_entry_points = list(importlib_metadata.entry_points(  # pylint: disable=unexpected-keyword-arg
             group=constants.OLD_SETUPTOOLS_PLUGINS_ENTRY_POINT))
         for entry_point in entry_points + old_entry_points:
             try:
@@ -207,6 +207,7 @@ class PluginsRegistry(Mapping):
             plugin2_dist = other_ep.entry_point.dist
             plugin1 = plugin1_dist.name.lower() if plugin1_dist else "unknown"
             plugin2 = plugin2_dist.name.lower() if plugin2_dist else "unknown"
+            # pylint: disable=broad-exception-raised
             raise Exception("Duplicate plugin name {0} from {1} and {2}.".format(
                 plugin_ep.name, plugin1, plugin2))
         if issubclass(plugin_ep.plugin_cls, interfaces.Plugin):

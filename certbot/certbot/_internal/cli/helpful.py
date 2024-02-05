@@ -2,7 +2,6 @@
 
 import argparse
 import functools
-import glob
 import sys
 from typing import Any
 from typing import Dict
@@ -26,11 +25,11 @@ from certbot._internal.cli.cli_utils import add_domains
 from certbot._internal.cli.cli_utils import CustomHelpFormatter
 from certbot._internal.cli.cli_utils import flag_default
 from certbot._internal.cli.cli_utils import HelpfulArgumentGroup
+from certbot._internal.cli.cli_utils import set_test_server_options
 from certbot._internal.cli.verb_help import VERB_HELP
 from certbot._internal.cli.verb_help import VERB_HELP_MAP
 from certbot._internal.display import obj as display_obj
 from certbot._internal.plugins import disco
-from certbot.compat import os
 from certbot.configuration import ArgumentSource
 from certbot.configuration import NamespaceConfig
 
@@ -165,6 +164,7 @@ class HelpfulArgumentParser:
     def remove_config_file_domains_for_renewal(self, config: NamespaceConfig) -> None:
         """Make "certbot renew" safe if domains are set in cli.ini."""
         # Works around https://github.com/certbot/certbot/issues/4096
+        assert config.argument_sources is not None
         if (config.argument_sources['domains'] == ArgumentSource.CONFIG_FILE and
                 self.verb == "renew"):
             config.domains = []
@@ -187,10 +187,12 @@ class HelpfulArgumentParser:
         #   2. config files
         #   3. env vars (shouldn't be any)
         #   4. command line
+
         def update_result(settings_dict: Dict[str, Tuple[configargparse.Action, str]],
                           source: ArgumentSource) -> None:
-            actions = [action for _, (action, _) in settings_dict.items()]
-            result.update({ action.dest: source for action in actions})
+            actions = [self._find_action_for_arg(arg) if action is None else action
+                       for arg, (action, _) in settings_dict.items()]
+            result.update({ action.dest: source for action in actions })
 
         # config file sources look like "config_file|<name of file>"
         for source_key in source_to_settings_dict:
@@ -203,16 +205,60 @@ class HelpfulArgumentParser:
         if 'command_line' in source_to_settings_dict:
             settings_dict: Dict[str, Tuple[None, List[str]]]
             settings_dict = source_to_settings_dict['command_line'] # type: ignore
-            (_, args) = settings_dict['']
-            args = [arg for arg in args if arg.startswith('-')]
+            (_, unprocessed_args) = settings_dict['']
+            args = []
+            for arg in unprocessed_args:
+                # ignore non-arguments
+                if not arg.startswith('-'):
+                    continue
+
+                # special case for config file argument, which we don't have an action for
+                if arg in ['-c', '--config']:
+                    result['config_dir'] = ArgumentSource.COMMAND_LINE
+                    continue
+
+                if '=' in arg:
+                    arg = arg.split('=')[0]
+                elif ' ' in arg:
+                    arg = arg.split(' ')[0]
+
+                if arg.startswith('--'):
+                    args.append(arg)
+                # for short args (ones that start with a single hyphen), handle
+                # the case of multiple short args together, e.g. "-tvm"
+                else:
+                    for short_arg in arg[1:]:
+                        args.append(f"-{short_arg}")
+
             for arg in args:
                 # find the action corresponding to this arg
-                for action in self.actions:
-                    if arg in action.option_strings:
-                        result[action.dest] = ArgumentSource.COMMAND_LINE
-                        continue
+                action = self._find_action_for_arg(arg)
+                result[action.dest] = ArgumentSource.COMMAND_LINE
 
         return result
+
+    def _find_action_for_arg(self, arg: str) -> configargparse.Action:
+        # Finds a configargparse Action which matches the given arg, where arg
+        # can either be preceded by hyphens (as on the command line) or not (as
+        # in config files)
+
+        # if the argument doesn't have leading hypens, prefix it so it can be
+        # compared directly w/ action option strings
+        if arg[0] != '-':
+            arg = '--' + arg
+
+        # first, check for exact matches
+        for action in self.actions:
+            if arg in action.option_strings:
+                return action
+
+        # now check for abbreviated (i.e. prefix) matches
+        for action in self.actions:
+            for option_string in action.option_strings:
+                if option_string.startswith(arg):
+                    return action
+
+        raise AssertionError(f"Action corresponding to argument {arg} is None")
 
     def parse_args(self) -> NamespaceConfig:
         """Parses command line arguments and returns the result.
@@ -271,33 +317,10 @@ class HelpfulArgumentParser:
         return config
 
     def set_test_server(self, config: NamespaceConfig) -> None:
-        """We have --staging/--dry-run; perform sanity check and set config.server"""
-
-        # Flag combinations should produce these results:
-        #                             | --staging      | --dry-run   |
-        # ------------------------------------------------------------
-        # | --server acme-v02         | Use staging    | Use staging |
-        # | --server acme-staging-v02 | Use staging    | Use staging |
-        # | --server <other>          | Conflict error | Use <other> |
-
-        default_servers = (flag_default("server"), constants.STAGING_URI)
-
-        if config.staging and config.server not in default_servers:
-            raise errors.Error("--server value conflicts with --staging")
-
-        if config.server == flag_default("server"):
-            config.server = constants.STAGING_URI
-
-        if config.dry_run:
-            if self.verb not in ["certonly", "renew"]:
-                raise errors.Error("--dry-run currently only works with the "
-                                   "'certonly' or 'renew' subcommands (%r)" % self.verb)
-            config.break_my_certs = config.staging = True
-            if glob.glob(os.path.join(config.config_dir, constants.ACCOUNTS_DIR, "*")):
-                # The user has a prod account, but might not have a staging
-                # one; we don't want to start trying to perform interactive registration
-                config.tos = True
-                config.register_unsafely_without_email = True
+        """Updates server, break_my_certs, staging, tos, and
+        register_unsafely_without_email in config as necessary to prepare
+        to use the test server."""
+        return set_test_server_options(self.verb, config)
 
     def handle_csr(self, config: NamespaceConfig) -> None:
         """Process a --csr flag."""

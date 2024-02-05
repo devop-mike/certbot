@@ -47,15 +47,8 @@ ECDSA_KEY_TYPE = 'ecdsa'
 
 
 def _suppress_x509_verification_warnings() -> None:
-    try:
-        import urllib3
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    except ImportError:
-        # Handle old versions of request with vendorized urllib3
-        # pylint: disable=no-member
-        from requests.packages.urllib3.exceptions import InsecureRequestWarning
-        requests.packages.urllib3.disable_warnings(  # type: ignore[attr-defined]
-            InsecureRequestWarning)
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def check_until_timeout(url: str, attempts: int = 30) -> None:
@@ -132,8 +125,8 @@ def generate_test_file_hooks(config_dir: str, hook_probe: str) -> None:
     """
     file_manager = contextlib.ExitStack()
     atexit.register(file_manager.close)
-    hook_path_ref = importlib_resources.files('certbot_integration_tests').joinpath(
-        'assets', 'hook.py')
+    hook_path_ref = (importlib_resources.files('certbot_integration_tests').joinpath('assets')
+                     .joinpath('hook.py'))
     hook_path = str(file_manager.enter_context(importlib_resources.as_file(hook_path_ref)))
 
     for hook_dir in list_renewal_hooks_dirs(config_dir):
@@ -269,9 +262,8 @@ def load_sample_data_path(workspace: str) -> str:
     :returns: the path to the loaded sample data directory
     :rtype: str
     """
-    original_ref = importlib_resources.files('certbot_integration_tests').joinpath(
-        'assets', 'sample-config'
-    )
+    original_ref = (importlib_resources.files('certbot_integration_tests').joinpath('assets')
+                    .joinpath('sample-config'))
     with importlib_resources.as_file(original_ref) as original:
         copied = os.path.join(workspace, 'sample-config')
         shutil.copytree(original, copied, symlinks=True)

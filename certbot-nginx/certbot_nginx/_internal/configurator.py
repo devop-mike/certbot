@@ -18,7 +18,6 @@ from typing import Mapping
 from typing import Optional
 from typing import Sequence
 from typing import Set
-from typing import Text
 from typing import Tuple
 from typing import Type
 from typing import Union
@@ -172,8 +171,8 @@ class NginxConfigurator(common.Configurator):
 
         file_manager = ExitStack()
         atexit.register(file_manager.close)
-        ref = importlib_resources.files("certbot_nginx").joinpath(
-            "_internal", "tls_configs", config_filename)
+        ref = (importlib_resources.files("certbot_nginx").joinpath("_internal")
+               .joinpath("tls_configs").joinpath(config_filename))
 
         return str(file_manager.enter_context(importlib_resources.as_file(ref)))
 
@@ -702,7 +701,7 @@ class NginxConfigurator(common.Configurator):
         # TODO: generate only once
         tmp_dir = os.path.join(self.config.work_dir, "snakeoil")
         le_key = crypto_util.generate_key(
-            key_size=1024, key_dir=tmp_dir, keyname="key.pem",
+            key_size=2048, key_dir=tmp_dir, keyname="key.pem",
             strict_permissions=self.config.strict_permissions)
         assert le_key.file is not None
         key = OpenSSL.crypto.load_privatekey(
@@ -1275,7 +1274,7 @@ def nginx_restart(nginx_ctl: str, nginx_conf: str, sleep_duration: int) -> None:
 
     """
     try:
-        reload_output: Text = ""
+        reload_output: str = ""
         with tempfile.TemporaryFile() as out:
             proc = subprocess.run([nginx_ctl, "-c", nginx_conf, "-s", "reload"],
                                   env=util.env_no_snap_for_external_calls(),

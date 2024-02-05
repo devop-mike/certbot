@@ -28,10 +28,7 @@ install_requires = [
     # simplicity. See https://github.com/certbot/certbot/issues/8761 for more
     # info.
     f'acme>={version}',
-    # We technically need ConfigArgParse 0.10.0 for Python 2.6 support, but
-    # saying so here causes a runtime error against our temporary fork of 0.9.3
-    # in which we added 2.6 support (see #2243), so we relax the requirement.
-    'ConfigArgParse>=0.9.3',
+    'ConfigArgParse>=1.5.3',
     'configobj>=5.0.6',
     'cryptography>=3.2.1',
     'distro>=1.0.1',
@@ -73,8 +70,7 @@ test_extras = [
     'coverage',
     'mypy',
     'pip',
-    # Our pinned version of pylint requires Python >= 3.7.2.
-    'pylint ; python_full_version >= "3.7.2"',
+    'pylint',
     'pytest',
     'pytest-cov',
     'pytest-xdist',
@@ -88,9 +84,6 @@ test_extras = [
     'types-requests',
     'types-setuptools',
     'types-six',
-    # typing-extensions is required to import typing.Protocol and make the mypy checks
-    # pass (along with pylint about non-existent objects) on Python 3.7
-    'typing-extensions',
     'wheel',
 ]
 
@@ -106,7 +99,7 @@ setup(
     author="Certbot Project",
     author_email='certbot-dev@eff.org',
     license='Apache License 2.0',
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Console',
@@ -116,11 +109,11 @@ setup(
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Security',
         'Topic :: System :: Installation/Setup',
